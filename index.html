@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BenchLabs Radar Setup</title>
+<style>
+  body{font-family:-apple-system,sans-serif;background:#0a0a0a;color:#0f0;padding:24px 20px;max-width:480px;margin:auto;line-height:1.5;}
+  h1{color:#00AAFF;font-size:26px;margin:0 0 6px 0;}
+  p.sub{color:#0a0;font-size:15px;margin:0 0 8px 0;}
+  .card{background:#111;border:1px solid #0a3;border-radius:12px;padding:20px;margin-top:20px;}
+  .card h2{color:#00AAFF;margin:0 0 4px 0;font-size:18px;}
+  .card p.hint{color:#0a0;font-size:14px;margin:0 0 14px 0;line-height:1.4;}
+  .card ol{color:#0a0;font-size:14px;line-height:1.6;padding-left:20px;margin:0 0 10px 0;}
+  .card a{color:#00AAFF;}
+  label{display:block;margin-top:16px;font-size:15px;font-weight:bold;letter-spacing:.3px;}
+  input,select{width:100%;padding:13px;margin-top:7px;background:#000;color:#0f0;
+    border:1px solid #0a5;border-radius:8px;box-sizing:border-box;font-size:17px;font-family:inherit;}
+  input::placeholder{color:#064;}
+  button{width:100%;background:#0f0;color:#000;padding:16px;border:none;border-radius:8px;
+    font-weight:bold;font-size:18px;margin-top:22px;letter-spacing:.3px;}
+  button:disabled{opacity:.5;}
+  small{color:#0a0;display:block;margin-top:10px;font-size:13px;line-height:1.5;}
+  #status{margin-top:14px;font-size:14px;padding:10px;border-radius:8px;display:none;}
+  #status.ok{display:block;background:#052;color:#7f7;}
+  #status.err{display:block;background:#500;color:#f77;}
+</style>
+</head>
+<body>
+
+<h1>BenchLabs Radar</h1>
+<p class="sub">Finish setting up your desk radar.</p>
+
+<div class="card">
+  <h2>1. Device IP</h2>
+  <p class="hint">
+    On the radar, tap the gear icon &rarr; <b>Change Parameters</b>. It shows
+    an IP address like <code>192.168.1.42</code> — enter it below.
+    Make sure your phone is on the same WiFi network as the radar (not
+    cellular data, not a different network).
+  </p>
+  <label>Device IP address</label>
+  <input id="deviceIp" placeholder="e.g. 192.168.1.42" inputmode="decimal" autocapitalize="off" autocorrect="off">
+</div>
+
+<div class="card">
+  <h2>2. Search Radius</h2>
+  <p class="hint">How far out (in nautical miles) should the radar look for aircraft?</p>
+  <label>Radius</label>
+  <select id="radius">
+    <option value="5">5 nm</option>
+    <option value="10">10 nm</option>
+    <option value="15" selected>15 nm</option>
+    <option value="25">25 nm</option>
+    <option value="40">40 nm</option>
+    <option value="60">60 nm</option>
+    <option value="100">100 nm</option>
+  </select>
+</div>
+
+<div class="card">
+  <h2>3. OpenSky Account (optional)</h2>
+  <p class="hint">
+    Skip this and the radar keeps tracking at a basic refresh rate
+    (updates every ~4 minutes). Add these for live updates every
+    15-30 seconds instead. Free, takes about 2 minutes:
+  </p>
+  <ol>
+    <li>Go to <a href="https://opensky-network.org/my-opensky" target="_blank" rel="noopener">opensky-network.org/my-opensky</a> and create a free account.</li>
+    <li>Once logged in, go to the <b>API Client</b> section.</li>
+    <li>Create a new API client and copy the <b>Client ID</b> and <b>Client Secret</b> it gives you.</li>
+    <li>Paste them below.</li>
+  </ol>
+  <label>OpenSky Client ID</label>
+  <input id="clientId" placeholder="e.g. abcd1234-..." autocapitalize="off" autocorrect="off">
+  <label>OpenSky Client Secret</label>
+  <input id="clientSecret" type="password" placeholder="paste secret here">
+</div>
+
+<button id="saveBtn" onclick="saveConfig()">Save to Device</button>
+<div id="status"></div>
+
+<small>This page talks directly to your radar over your local WiFi network — nothing is sent anywhere else.</small>
+
+<script>
+async function saveConfig() {
+  const ip = document.getElementById('deviceIp').value.trim();
+  const radius = document.getElementById('radius').value;
+  const clientId = document.getElementById('clientId').value.trim();
+  const clientSecret = document.getElementById('clientSecret').value.trim();
+  const btn = document.getElementById('saveBtn');
+  const status = document.getElementById('status');
+
+  if (!ip) {
+    status.className = 'err';
+    status.textContent = 'Enter the device IP address shown on the radar first.';
+    return;
+  }
+  if ((clientId && !clientSecret) || (!clientId && clientSecret)) {
+    status.className = 'err';
+    status.textContent = 'Enter both the Client ID and Client Secret, or leave both blank.';
+    return;
+  }
+
+  btn.disabled = true;
+  status.className = '';
+  status.textContent = 'Sending to device...';
+
+  const body = new URLSearchParams();
+  body.append('radius', radius);
+  if (clientId) body.append('os_id', clientId);
+  if (clientSecret) body.append('os_secret', clientSecret);
+
+  try {
+    const res = await fetch('http://' + ip + '/configure', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: body.toString()
+    });
+    if (res.ok) {
+      status.className = 'ok';
+      status.textContent = 'Saved! Check the radar — it should be tracking now.';
+    } else {
+      status.className = 'err';
+      status.textContent = 'Device responded with an error. Double-check the IP and try again.';
+    }
+  } catch (e) {
+    status.className = 'err';
+    status.textContent = "Couldn't reach the device. Make sure your phone is on the same WiFi network as the radar (not cellular, not a different network).";
+  }
+  btn.disabled = false;
+}
+</script>
+
+</body>
+</html>
