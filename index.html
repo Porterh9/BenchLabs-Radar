@@ -77,58 +77,61 @@
   <input id="clientSecret" type="password" placeholder="paste secret here">
 </div>
 
-<button id="saveBtn" onclick="saveConfig()">Save to Device</button>
+<form id="configForm" method="POST" onsubmit="return prepareSubmit(event)">
+  <input type="hidden" name="radius" id="radiusHidden">
+  <input type="hidden" name="os_id" id="clientIdHidden">
+  <input type="hidden" name="os_secret" id="clientSecretHidden">
+</form>
+
+<button id="saveBtn" onclick="document.getElementById('configForm').requestSubmit ? document.getElementById('configForm').requestSubmit() : submitLegacy()">Save to Device</button>
 <div id="status"></div>
 
-<small>This page talks directly to your radar over your local WiFi network — nothing is sent anywhere else.</small>
+<small>This page talks directly to your radar over your local WiFi network — nothing is sent anywhere else. Tapping "Save to Device" will briefly leave this page and open the radar's own confirmation screen; that's expected.</small>
 
 <script>
-async function saveConfig() {
+function prepareSubmit(e) {
   const ip = document.getElementById('deviceIp').value.trim();
   const radius = document.getElementById('radius').value;
   const clientId = document.getElementById('clientId').value.trim();
   const clientSecret = document.getElementById('clientSecret').value.trim();
-  const btn = document.getElementById('saveBtn');
   const status = document.getElementById('status');
 
   if (!ip) {
     status.className = 'err';
     status.textContent = 'Enter the device IP address shown on the radar first.';
-    return;
+    e.preventDefault();
+    return false;
   }
   if ((clientId && !clientSecret) || (!clientId && clientSecret)) {
     status.className = 'err';
     status.textContent = 'Enter both the Client ID and Client Secret, or leave both blank.';
-    return;
+    e.preventDefault();
+    return false;
   }
 
-  btn.disabled = true;
-  status.className = '';
+  document.getElementById('radiusHidden').value = radius;
+  document.getElementById('clientIdHidden').value = clientId;
+  document.getElementById('clientSecretHidden').value = clientSecret;
+
+  // A real full-page form submission (not fetch/XHR) is what actually
+  // crosses from this HTTPS page to the device's plain-HTTP local address.
+  // Browsers silently block background fetch() calls from HTTPS to HTTP
+  // even on the same network (mixed-content blocking) — that's the
+  // "couldn't reach the device" error, not an actual connectivity problem.
+  // A full navigation is allowed, so this leaves the page and lands on
+  // the radar's own confirmation screen instead.
+  document.getElementById('configForm').action = 'http://' + ip + '/configure';
+  status.className = 'ok';
   status.textContent = 'Sending to device...';
+  return true;
+}
 
-  const body = new URLSearchParams();
-  body.append('radius', radius);
-  if (clientId) body.append('os_id', clientId);
-  if (clientSecret) body.append('os_secret', clientSecret);
-
-  try {
-    const res = await fetch('http://' + ip + '/configure', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: body.toString()
-    });
-    if (res.ok) {
-      status.className = 'ok';
-      status.textContent = 'Saved! Check the radar — it should be tracking now.';
-    } else {
-      status.className = 'err';
-      status.textContent = 'Device responded with an error. Double-check the IP and try again.';
-    }
-  } catch (e) {
-    status.className = 'err';
-    status.textContent = "Couldn't reach the device. Make sure your phone is on the same WiFi network as the radar (not cellular, not a different network).";
+// Fallback for older browsers without requestSubmit()
+function submitLegacy() {
+  const fakeEvent = { preventDefault: function(){} };
+  if (prepareSubmit(fakeEvent)) {
+    document.getElementById('configForm').submit();
   }
-  btn.disabled = false;
 }
 </script>
 
