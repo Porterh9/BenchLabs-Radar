@@ -78,6 +78,16 @@
   <input id="clientSecret" type="password" placeholder="paste secret here">
 </div>
 
+<div class="card">
+  <h2>Switch Back to Basic Mode</h2>
+  <p class="hint">
+    Already have an OpenSky account saved on the device and want to remove it?
+    This switches the radar back to basic mode (updates every ~4 minutes,
+    no account needed) — useful if you're passing the radar along to someone else.
+  </p>
+  <button id="clearBtn" onclick="clearOpenSky()" style="background:#333;color:#0f0;">Switch to Basic Mode</button>
+</div>
+
 <button id="saveBtn" onclick="saveConfig()">Save to Device</button>
 <div id="status"></div>
 
@@ -119,6 +129,17 @@ function saveConfig() {
   //   - a plain navigation via window.location.href does neither — the
   //     browser just treats it like following a normal link
   window.location.href = 'http://' + ip + '/configure?' + params.toString();
+}
+
+function clearOpenSky() {
+  const ip = document.getElementById('deviceIp').value.trim();
+  if (!ip) {
+    document.getElementById('status').className = 'err';
+    document.getElementById('status').textContent = 'Enter the device IP address shown on the radar first.';
+    return;
+  }
+  if (!confirm('Switch back to basic mode? This removes the saved OpenSky account from this device.')) return;
+  window.location.href = 'http://' + ip + '/clear-opensky';
 }
 </script>
 
