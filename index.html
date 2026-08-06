@@ -33,7 +33,7 @@
 <div class="card">
   <h2>1. Device IP</h2>
   <p class="hint">
-    Enter the IP address show on the Radar.
+    Enter the IP address shown on the Radar.
     It should look something like <code>192.168.1.42</code>.
     Make sure your phone or computer is on the same WiFi network as the radar (not
     cellular data, not a different network).
@@ -67,29 +67,24 @@
   <ol>
     <li>Go to <a href="https://opensky-network.org/" target="_blank" rel="noopener">opensky-network.org</a> and log in, or register a free account if you don't have one yet.</li>
     <li>Once logged in, find your <b>Account</b> page (top menu) and look for the <b>API Client</b> section.</li>
-    <li>Create a new API client and copy the <b>Client ID</b> and <b>Client Secret</b> it gives you.</li>
+    <li>Create a new API client and download the file. From there copy the <b>Client ID</b> and <b>Client Secret</b> it gives you.</li>
     <li>Paste them below.</li>
   </ol>
   <p class="hint">OpenSky restructured their site in 2026 — if a step above doesn't match what you see, their Account page is the one to look for; the API Client option lives there.</p>
+  <p class="hint">If you've already entered your OpenSky account here before, it's saved on the device — you don't need to re-enter it unless you want to switch accounts.</p>
   <label>OpenSky Client ID</label>
   <input id="clientId" placeholder="e.g. abcd1234-..." autocapitalize="off" autocorrect="off">
   <label>OpenSky Client Secret</label>
   <input id="clientSecret" type="password" placeholder="paste secret here">
 </div>
 
-<form id="configForm" method="POST" onsubmit="return prepareSubmit(event)">
-  <input type="hidden" name="radius" id="radiusHidden">
-  <input type="hidden" name="os_id" id="clientIdHidden">
-  <input type="hidden" name="os_secret" id="clientSecretHidden">
-</form>
-
-<button id="saveBtn" onclick="document.getElementById('configForm').requestSubmit ? document.getElementById('configForm').requestSubmit() : submitLegacy()">Save to Device</button>
+<button id="saveBtn" onclick="saveConfig()">Save to Device</button>
 <div id="status"></div>
 
 <small>This page talks directly to your radar over your local WiFi network — nothing is sent anywhere else. Tapping "Save to Device" will briefly leave this page and open the radar's own confirmation screen; that's expected.</small>
 
 <script>
-function prepareSubmit(e) {
+function saveConfig() {
   const ip = document.getElementById('deviceIp').value.trim();
   const radius = document.getElementById('radius').value;
   const clientId = document.getElementById('clientId').value.trim();
@@ -99,39 +94,31 @@ function prepareSubmit(e) {
   if (!ip) {
     status.className = 'err';
     status.textContent = 'Enter the device IP address shown on the radar first.';
-    e.preventDefault();
-    return false;
+    return;
   }
   if ((clientId && !clientSecret) || (!clientId && clientSecret)) {
     status.className = 'err';
     status.textContent = 'Enter both the Client ID and Client Secret, or leave both blank.';
-    e.preventDefault();
-    return false;
+    return;
   }
 
-  document.getElementById('radiusHidden').value = radius;
-  document.getElementById('clientIdHidden').value = clientId;
-  document.getElementById('clientSecretHidden').value = clientSecret;
+  const params = new URLSearchParams({ radius: radius });
+  if (clientId) params.append('os_id', clientId);
+  if (clientSecret) params.append('os_secret', clientSecret);
 
-  // A real full-page form submission (not fetch/XHR) is what actually
-  // crosses from this HTTPS page to the device's plain-HTTP local address.
-  // Browsers silently block background fetch() calls from HTTPS to HTTP
-  // even on the same network (mixed-content blocking) — that's the
-  // "couldn't reach the device" error, not an actual connectivity problem.
-  // A full navigation is allowed, so this leaves the page and lands on
-  // the radar's own confirmation screen instead.
-  document.getElementById('configForm').action = 'http://' + ip + '/configure';
   status.className = 'ok';
   status.textContent = 'Sending to device...';
-  return true;
-}
 
-// Fallback for older browsers without requestSubmit()
-function submitLegacy() {
-  const fakeEvent = { preventDefault: function(){} };
-  if (prepareSubmit(fakeEvent)) {
-    document.getElementById('configForm').submit();
-  }
+  // A full browser navigation (not fetch/XHR, not a <form> POST) is what
+  // actually works crossing from this HTTPS page to the device's plain
+  // HTTP local address:
+  //   - a background fetch() gets silently blocked by mixed-content
+  //     policy ("couldn't reach the device", not an actual network issue)
+  //   - a real <form> submission throws up a blocking "this connection
+  //     is not secure" warning page before it'll continue
+  //   - a plain navigation via window.location.href does neither — the
+  //     browser just treats it like following a normal link
+  window.location.href = 'http://' + ip + '/configure?' + params.toString();
 }
 </script>
 
